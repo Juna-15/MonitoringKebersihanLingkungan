@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "626767776905",
+    "project_id": "ecoclean-project",
+    "storage_bucket": "ecoclean-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626767776905:android:b348731d18bcbf551bca58",
+        "android_client_info": {
+          "package_name": "com.example.ecoclean_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDRvzjnUWa-vOHGZLFXF3ArkST9eEUZl8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
