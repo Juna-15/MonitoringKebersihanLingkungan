@@ -1,11 +1,11 @@
 import 'package:ecoclean_app/firebase_options.dart';
 import 'package:ecoclean_app/screens/auth/sign_in_screen.dart';
 import 'package:ecoclean_app/screens/navigation_wrapper.dart';
+import 'package:ecoclean_app/screens/splash_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-// Notifier global untuk Dark Mode (Personalisasi)
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 void main() async {
@@ -31,24 +31,33 @@ class EcoCleanApp extends StatelessWidget {
             useMaterial3: true,
           ),
           darkTheme: ThemeData.dark(useMaterial3: true),
-          // Monitoring status login secara Real-Time
-          home: StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-              // Jika ada data user, berarti sedang login
-              if (snapshot.hasData && snapshot.data != null) {
-                return const NavigationWrapper();
-              }
-              // Jika tidak ada data, berarti belum login
-              return const SignInScreen();
-            },
-          ),
+
+          home: const SplashScreen(),
         );
+      },
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasData && snapshot.data != null) {
+          return const NavigationWrapper();
+        }
+
+        return const SignInScreen();
       },
     );
   }

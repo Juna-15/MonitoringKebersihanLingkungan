@@ -5,6 +5,18 @@ class DatabaseService {
   static final _db = FirebaseFirestore.instance;
   static final _reports = _db.collection('reports');
 
+  static bool checkIsAdmin(String? email) {
+    if (email == null) return false;
+
+    // Daftar email spesifik yang diberikan akses Administrator
+    final List<String> adminEmails = [
+      "muhammadjndi@gmail.com",
+      "admin@ecoclean.com",
+    ];
+
+    return adminEmails.contains(email.toLowerCase().trim());
+  }
+
   static Future<void> addReport(Report report) async {
     await _reports.add(report.toDocument());
   }

@@ -36,7 +36,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
     }
   }
 
-  // LOGIKA GPS SESUAI KODE DOSEN ANDA (Dengan Tombol Get Location)
+  
   Future<void> _getLocation() async {
     setState(() => _isLocating = true);
     try {
@@ -129,7 +129,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
             ),
             const SizedBox(height: 20),
 
-            // TOMBOL GET LOCATION (LOGIKA KHUSUS GPS)
+            
             Row(
               children: [
                 Expanded(

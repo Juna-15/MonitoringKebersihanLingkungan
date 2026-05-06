@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../models/report.dart';
 import '../services/database_service.dart';
 import 'detail_screen.dart';
@@ -13,9 +16,18 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // 1. Tambahkan Controller dan variabel untuk menampung query pencarian
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
+  String _selectedCategory = "Semua";
+
+  
+  final List<String> _categories = [
+    'Semua',
+    'Tumpukan Sampah',
+    'Saluran Tersumbat',
+    'Limbah Berbahaya',
+    'Coretan Liar',
+  ];
 
   @override
   void dispose() {
@@ -25,213 +37,361 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      // 2. Modifikasi AppBar agar lebih interaktif dan estetik
-      appBar: AppBar(
-        title: const Text(
-          "EcoClean Feed",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(70),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
-              },
-              decoration: InputDecoration(
-                hintText: "Cari kategori atau deskripsi...",
-                prefixIcon: const Icon(Icons.search, color: Colors.green),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = "";
-                          });
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
-                ),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+      body: SafeArea(
+        child: Column(
+          children: [
+            
+            _buildHeader(user, isDark),
+
+            
+            _buildFilterSection(isDark),
+
+            
+            Expanded(
+              child: StreamBuilder<List<Report>>(
+                stream: DatabaseService.getReports(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.green),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  
+                  final filteredReports = snapshot.data!.where((report) {
+                    final matchesSearch =
+                        report.description!.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        ) ||
+                        report.category!.toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
+                        );
+                    final matchesCategory =
+                        _selectedCategory == "Semua" ||
+                        report.category == _selectedCategory;
+                    return matchesSearch && matchesCategory;
+                  }).toList();
+
+                  if (filteredReports.isEmpty) {
+                    return _buildNoResultsState();
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: filteredReports.length,
+                    itemBuilder: (context, i) {
+                      return _buildReportCard(filteredReports[i], isDark);
+                    },
+                  );
+                },
               ),
             ),
-          ),
+          ],
         ),
       ),
-      body: StreamBuilder<List<Report>>(
-        stream: DatabaseService.getReports(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text("Belum ada laporan kebersihan."));
-          }
-
-          // 3. LOGIKA FILTERING: Menyaring data berdasarkan input user
-          final allReports = snapshot.data!;
-          final filteredReports = allReports.where((report) {
-            final category = report.category?.toLowerCase() ?? "";
-            final description = report.description?.toLowerCase() ?? "";
-            return category.contains(_searchQuery) ||
-                description.contains(_searchQuery);
-          }).toList();
-
-          if (filteredReports.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 60, color: Colors.grey[400]),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Laporan '$_searchQuery' tidak ditemukan",
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(10),
-            itemCount: filteredReports.length,
-            itemBuilder: (context, i) {
-              final report = filteredReports[i];
-              return Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.only(bottom: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                elevation: 3,
-                child: InkWell(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DetailScreen(report: report),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (report.image != null)
-                        Stack(
-                          children: [
-                            Image.memory(
-                              base64Decode(report.image!),
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            ),
-                            // Badge Kategori di atas gambar agar lebih modern
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  report.category ?? "Umum",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              report.description ?? "",
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.person,
-                                      size: 14,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      report.userFullName ?? "Anonim",
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.favorite,
-                                      size: 14,
-                                      color: Colors.red,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      "${report.favoriteBy.length}",
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddPostScreen()),
         ),
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add_a_photo, color: Colors.white),
+        backgroundColor: Colors.green.shade700,
+        elevation: 4,
+        icon: const Icon(Icons.add_a_photo, color: Colors.white),
+        label: Text(
+          "LAPOR",
+          style: GoogleFonts.urbanist(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  
+  Widget _buildHeader(User? user, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Halo, Selamat Hari Hijau!",
+                    style: GoogleFonts.urbanist(
+                      color: Colors.grey,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    user?.displayName?.split(' ')[0] ?? "User",
+                    style: GoogleFonts.urbanist(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const CircleAvatar(
+                backgroundColor: Colors.green,
+                child: Icon(Icons.eco, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Search Bar Modern
+          TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: InputDecoration(
+              hintText: "Cari area atau jenis laporan...",
+              hintStyle: GoogleFonts.urbanist(fontSize: 14, color: Colors.grey),
+              prefixIcon: const Icon(Icons.search, color: Colors.green),
+              filled: true,
+              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  
+  Widget _buildFilterSection(bool isDark) {
+    return Container(
+      height: 60,
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 15),
+        scrollDirection: Axis.horizontal,
+        itemCount: _categories.length,
+        itemBuilder: (context, i) {
+          final cat = _categories[i];
+          final bool isSelected = _selectedCategory == cat;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: ChoiceChip(
+              label: Text(
+                cat,
+                style: GoogleFonts.urbanist(
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? Colors.grey : Colors.black87),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() => _selectedCategory = cat);
+              },
+              selectedColor: Colors.green.shade700,
+              backgroundColor: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              side: BorderSide(
+                color: isSelected ? Colors.green.shade700 : Colors.transparent,
+              ),
+              showCheckmark: false,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  
+  Widget _buildReportCard(Report report, bool isDark) {
+    String formattedTime = report.createdAt != null
+        ? DateFormat('dd MMM, HH:mm').format(report.createdAt!.toDate())
+        : "-";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(25),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DetailScreen(report: report)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              
+              if (report.image != null)
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(25),
+                      ),
+                      child: Image.memory(
+                        base64Decode(report.image!),
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    
+                    Positioned(
+                      top: 15,
+                      left: 15,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade700,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          report.category!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              // Info Detail
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      report.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.urbanist(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: Colors.redAccent,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Lihat Lokasi",
+                              style: GoogleFonts.urbanist(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 14,
+                              color: Colors.green.shade300,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              formattedTime,
+                              style: GoogleFonts.urbanist(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.eco_outlined,
+            size: 80,
+            color: Colors.green.withOpacity(0.2),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "Belum Ada Laporan",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoResultsState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.search_off_rounded, size: 60, color: Colors.grey),
+          const SizedBox(height: 10),
+          Text(
+            "Hasil tidak ditemukan",
+            style: GoogleFonts.urbanist(color: Colors.grey),
+          ),
+        ],
       ),
     );
   }
